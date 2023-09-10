@@ -17,9 +17,15 @@ use bevy_ecs::prelude::*;
 use bevy_time::TimeSender;
 use bevy_utils::Instant;
 use std::sync::Arc;
+use std::time::Duration;
 use wgpu::{
     Adapter, AdapterInfo, CommandBuffer, CommandEncoder, Instance, Queue, RequestAdapterOptions,
 };
+
+#[derive(Resource, Default)]
+pub struct FramePresentDuration {
+    pub duration: Duration
+}
 
 /// Updates the [`RenderGraph`] with all of its nodes and then runs it to render the entire frame.
 pub fn render_system(world: &mut World) {
@@ -54,6 +60,8 @@ pub fn render_system(world: &mut World) {
         panic!("Error running render graph: {e}");
     }
 
+    let pre_texture_present_time = Instant::now();
+
     {
         let _span = info_span!("present_frames").entered();
 
@@ -85,6 +93,10 @@ pub fn render_system(world: &mut World) {
     }
 
     crate::view::screenshot::collect_screenshots(world);
+
+    // record the time spent presenting this frame
+    let mut frame_present_duration = world.resource_mut::<FramePresentDuration>();
+    frame_present_duration.duration = pre_texture_present_time.elapsed();
 
     // update the time and send it to the app world
     let time_sender = world.resource::<TimeSender>();

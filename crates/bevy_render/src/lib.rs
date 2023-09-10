@@ -34,6 +34,7 @@ pub mod prelude {
         color::Color,
         mesh::{morph::MorphWeights, shape, Mesh},
         render_resource::Shader,
+        renderer::FramePresentDuration,
         spatial_bundle::SpatialBundle,
         texture::{Image, ImagePlugin},
         view::{ComputedVisibility, Msaa, Visibility, VisibilityBundle},
@@ -50,7 +51,7 @@ use crate::{
     camera::CameraPlugin,
     mesh::{morph::MorphPlugin, MeshPlugin},
     render_resource::{PipelineCache, Shader, ShaderLoader},
-    renderer::{render_system, RenderInstance},
+    renderer::{render_system, RenderInstance, FramePresentDuration},
     settings::WgpuSettings,
     view::{ViewPlugin, WindowRenderPlugin},
 };
@@ -289,7 +290,8 @@ impl Plugin for RenderPlugin {
                             .in_set(RenderSet::Render),
                         World::clear_entities.in_set(RenderSet::Cleanup),
                     ),
-                );
+                )
+                .init_resource::<FramePresentDuration>();
 
             let (sender, receiver) = bevy_time::create_time_channels();
             app.insert_resource(receiver);
