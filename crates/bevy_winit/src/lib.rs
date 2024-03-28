@@ -23,7 +23,7 @@ use bevy_app::{App, Last, Plugin};
 use bevy_ecs::prelude::*;
 #[allow(deprecated)]
 use bevy_window::{exit_on_all_closed, Window, WindowCreated};
-pub use system::create_windows;
+pub use system::{CachedWindow, create_windows};
 use system::{changed_windows, despawn_windows};
 pub use winit_config::*;
 pub use winit_event::*;
