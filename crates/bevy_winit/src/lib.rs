@@ -23,7 +23,7 @@ use bevy_app::{App, Last, Plugin};
 use bevy_ecs::prelude::*;
 #[allow(deprecated)]
 use bevy_window::{exit_on_all_closed, Window, WindowCreated};
-pub use system::{CachedWindow, create_windows};
+pub use system::{create_windows, CachedWindow};
 use system::{changed_windows, despawn_windows};
 pub use winit_config::*;
 pub use winit_event::*;
@@ -110,8 +110,7 @@ impl<T: Event> Plugin for WinitPlugin<T> {
             event_loop_builder.with_android_app(ANDROID_APP.get().expect(msg).clone());
         }
 
-        app.add_plugins(WinitCorePlugin)
-            .set_runner(winit_runner::<T>);
+        app.add_plugins(WinitCorePlugin).set_runner(winit_runner::<T>);
 
         let event_loop = event_loop_builder
             .build()

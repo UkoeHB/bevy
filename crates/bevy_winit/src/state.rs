@@ -182,6 +182,11 @@ impl<T: Event> ApplicationHandler<T> for WinitAppRunnerState<T> {
     ) {
         self.window_event_received = true;
 
+        // Reinitialize system states if the world changed.
+        if !self.event_writer_system_state.matches_world(self.app.world().id()) {
+            self.event_writer_system_state = SystemState::new(self.app.world_mut());
+        }
+
         let (
             mut window_resized,
             mut window_backend_scale_factor_changed,
@@ -491,6 +496,9 @@ impl<T: Event> ApplicationHandler<T> for WinitAppRunnerState<T> {
             self.run_app_update();
 
             // Running the app may have changed the WinitSettings resource, so we have to re-extract it.
+            if !focused_windows_state.matches_world(self.app.world().id()) {
+                focused_windows_state = SystemState::new(self.app.world_mut());
+            }
             let (config, windows) = focused_windows_state.get(self.world());
             let focused = windows.iter().any(|(_, window)| window.focused);
 
