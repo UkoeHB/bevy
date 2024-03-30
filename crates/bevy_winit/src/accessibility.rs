@@ -19,10 +19,12 @@ use bevy_ecs::{
     prelude::{DetectChanges, Entity, EventReader, EventWriter},
     query::With,
     schedule::IntoSystemConfigs,
-    system::{NonSendMut, Query, Res, ResMut, Resource},
+    system::{NonSend, NonSendMut, Query, Res, ResMut, Resource},
 };
 use bevy_hierarchy::{Children, Parent};
 use bevy_window::{PrimaryWindow, Window, WindowClosed};
+
+use crate::WinitWindows;
 
 /// Maps window entities to their `AccessKit` [`Adapter`]s.
 #[derive(Default, Deref, DerefMut)]
@@ -44,21 +46,21 @@ impl WinitActionRequestHandler {
 
 struct AccessKitState {
     name: String,
-    entity: Entity,
+    id: NodeId,
     requested: AccessibilityRequested,
 }
 
 impl AccessKitState {
     fn new(
         name: impl Into<String>,
-        entity: Entity,
+        id: NodeId,
         requested: AccessibilityRequested,
     ) -> Arc<Mutex<Self>> {
         let name = name.into();
 
         Arc::new(Mutex::new(Self {
             name,
-            entity,
+            id,
             requested,
         }))
     }
@@ -71,15 +73,14 @@ impl AccessKitState {
 
     fn build_initial_tree(&mut self) -> TreeUpdate {
         let root = self.build_root();
-        let accesskit_window_id = NodeId(self.entity.to_bits());
-        let mut tree = Tree::new(accesskit_window_id);
+        let mut tree = Tree::new(self.id);
         tree.app_name = Some(self.name.clone());
         self.requested.set(true);
 
         TreeUpdate {
-            nodes: vec![(accesskit_window_id, root)],
+            nodes: vec![(self.id, root)],
             tree: Some(tree),
-            focus: accesskit_window_id,
+            focus: self.id,
         }
     }
 }
@@ -129,7 +130,8 @@ pub(crate) fn prepare_accessibility_for_window(
     adapters: &mut AccessKitAdapters,
     handlers: &mut WinitActionRequestHandlers,
 ) {
-    let state = AccessKitState::new(name, entity, accessibility_requested);
+    let accesskit_window_id = NodeId(winit_window.id().into());
+    let state = AccessKitState::new(name, accesskit_window_id, accessibility_requested);
     let activation_handler = WinitActivationHandler::new(Arc::clone(&state));
 
     let action_request_handler = WinitActionRequestHandler::new();
@@ -179,6 +181,7 @@ fn should_update_accessibility_nodes(
 
 fn update_accessibility_nodes(
     mut adapters: NonSendMut<AccessKitAdapters>,
+    windows: NonSend<WinitWindows>,
     focus: Res<Focus>,
     primary_window: Query<(Entity, &Window), With<PrimaryWindow>>,
     nodes: Query<(
@@ -189,19 +192,23 @@ fn update_accessibility_nodes(
     )>,
     node_entities: Query<Entity, With<AccessibilityNode>>,
 ) {
-    let Ok((primary_window_id, primary_window)) = primary_window.get_single() else {
+    let Ok((primary_window_entity, primary_window)) = primary_window.get_single() else {
         return;
     };
-    let Some(adapter) = adapters.get_mut(&primary_window_id) else {
+    let Some(adapter) = adapters.get_mut(&primary_window_entity) else {
+        return;
+    };
+    let Some(&primary_window_id) = windows.entity_to_winit.get(&primary_window_entity) else {
         return;
     };
     if focus.is_changed() || !nodes.is_empty() {
         adapter.update_if_active(|| {
             update_adapter(
+                &windows,
                 nodes,
                 node_entities,
                 primary_window,
-                primary_window_id,
+                primary_window_id.into(),
                 focus,
             )
         });
@@ -209,6 +216,7 @@ fn update_accessibility_nodes(
 }
 
 fn update_adapter(
+    windows: &WinitWindows,
     nodes: Query<(
         Entity,
         &AccessibilityNode,
@@ -217,7 +225,7 @@ fn update_adapter(
     )>,
     node_entities: Query<Entity, With<AccessibilityNode>>,
     primary_window: &Window,
-    primary_window_id: Entity,
+    primary_window_id: u64,
     focus: Res<Focus>,
 ) -> TreeUpdate {
     let mut to_update = vec![];
@@ -237,13 +245,21 @@ fn update_adapter(
     }
     window_node.set_children(window_children);
     let window_node = window_node.build();
-    let node_id = NodeId(primary_window_id.to_bits());
+    let node_id = NodeId(primary_window_id);
     let window_update = (node_id, window_node);
     to_update.insert(0, window_update);
+    let focus = focus.map(|f| {
+        windows
+            .entity_to_winit
+            .get(&f)
+            .copied()
+            .map(u64::from)
+            .unwrap_or(f.to_bits())
+    });
     TreeUpdate {
         nodes: to_update,
         tree: None,
-        focus: NodeId(focus.unwrap_or(primary_window_id).to_bits()),
+        focus: NodeId(focus.unwrap_or(primary_window_id)),
     }
 }
 
