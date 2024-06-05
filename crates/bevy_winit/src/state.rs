@@ -183,7 +183,10 @@ impl<T: Event> ApplicationHandler<T> for WinitAppRunnerState<T> {
         self.window_event_received = true;
 
         // Reinitialize system states if the world changed.
-        if !self.event_writer_system_state.matches_world(self.app.world().id()) {
+        if !self
+            .event_writer_system_state
+            .matches_world(self.app.world().id())
+        {
             self.event_writer_system_state = SystemState::new(self.app.world_mut());
         }
 
